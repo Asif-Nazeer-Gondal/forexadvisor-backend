@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.203.0/"
+  },
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "start": "deno run --allow-net --allow-env index.ts",
+    "dev": "deno run --allow-net --allow-env --watch index.ts"
+  }
+} 
