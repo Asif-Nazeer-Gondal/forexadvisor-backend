@@ -1,4 +1,5 @@
-import { serve } from "https://deno.land/std/http/server.ts";
+import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7?target=deno";
 
 // CORS Headers
 const corsHeaders = {
@@ -21,8 +22,7 @@ serve(async (req) => {
         message: "ForexAdvisor Backend is running!", 
         status: "OK",
         timestamp: new Date().toISOString(),
-        environment: "Deno Deploy",
-        endpoints: ["/api/health", "/api/forex", "/api/users"]
+        environment: "Deno Deploy"
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
@@ -54,17 +54,35 @@ serve(async (req) => {
     });
   }
 
-  // Users endpoint (mocked for now)
+  // Users fetch from Supabase
   if (url.pathname === "/api/users") {
-    const mockUsers = [
-      { id: 1, name: "John Doe", email: "john@example.com" },
-      { id: 2, name: "Jane Smith", email: "jane@example.com" },
-    ];
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    return new Response(JSON.stringify(mockUsers), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return new Response(JSON.stringify({ error: "Missing Supabase credentials" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    try {
+      const { data, error } = await supabase.from("users").select("*");
+
+      if (error) throw error;
+
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
   }
 
   // 404 fallback
@@ -72,4 +90,4 @@ serve(async (req) => {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status: 404,
   });
-}, { port: 8002 });
+}); 
