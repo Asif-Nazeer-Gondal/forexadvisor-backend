@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.203.0/",
+    "supabase": "https://esm.sh/@supabase/supabase-js@2.39.7?target=deno"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noNpm": true
+  },
+  "tasks": {
+    "start": "deno run --allow-net --allow-env --no-npm index-clean.ts",
+    "dev": "deno run --allow-net --allow-env --no-npm --watch index-clean.ts"
+  }
+} 
