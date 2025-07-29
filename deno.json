@@ -1,28 +1,14 @@
 {
-<<<<<<< HEAD
   "tasks": {
     "dev": "deno run --allow-net --allow-env main.ts",
     "start": "deno run --allow-net --allow-env main.ts"
   },
   "imports": {
-    "oak": "https://deno.land/x/oak/mod.ts"
+    "oak": "https://deno.land/x/oak/mod.ts",
+    "std/": "https://deno.land/std@0.203.0/"
   },
   "compilerOptions": {
     "lib": ["deno.window"],
     "strict": true
   }
-}
-=======
-  "imports": {
-    "std/": "https://deno.land/std@0.203.0/"
-  },
-  "compilerOptions": {
-    "strict": true,
-    "lib": ["deno.window"]
-  },
-  "tasks": {
-    "start": "deno run --allow-net --allow-env index.ts",
-    "dev": "deno run --allow-net --allow-env --watch index.ts"
-  }
 } 
->>>>>>> 5c1b03f937a8a36d0eb81b0b3da5a3fe7f6cd52a
