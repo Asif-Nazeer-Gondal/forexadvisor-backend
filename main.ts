@@ -122,6 +122,196 @@ router.post("/api/forex", async (ctx) => {
   }
 });
 
+// ===== INVESTMENT ENDPOINTS =====
+
+// Get all investments for a user
+router.get("/api/investments/:userId", async (ctx) => {
+  try {
+    const userId = ctx.params.userId;
+    const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&order=date.desc`);
+    
+    ctx.response.body = { 
+      success: true, 
+      investments,
+      count: investments.length 
+    };
+  } catch (error) {
+    console.error("Error fetching investments:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to fetch investments",
+      message: error.message 
+    };
+  }
+});
+
+// Get active investments for a user
+router.get("/api/investments/:userId/active", async (ctx) => {
+  try {
+    const userId = ctx.params.userId;
+    const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&closed=eq.false&order=date.desc`);
+    
+    ctx.response.body = { 
+      success: true, 
+      investments,
+      count: investments.length 
+    };
+  } catch (error) {
+    console.error("Error fetching active investments:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to fetch active investments",
+      message: error.message 
+    };
+  }
+});
+
+// Get closed investments for a user
+router.get("/api/investments/:userId/closed", async (ctx) => {
+  try {
+    const userId = ctx.params.userId;
+    const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&closed=eq.true&order=closedDate.desc`);
+    
+    ctx.response.body = { 
+      success: true, 
+      investments,
+      count: investments.length 
+    };
+  } catch (error) {
+    console.error("Error fetching closed investments:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to fetch closed investments",
+      message: error.message 
+    };
+  }
+});
+
+// Add new investment
+router.post("/api/investments", async (ctx) => {
+  try {
+    const body = await ctx.request.body().value;
+    const { user_id, pair, amount, investedRate } = body;
+
+    if (!user_id || !pair || !amount || !investedRate) {
+      ctx.response.status = 400;
+      ctx.response.body = { 
+        success: false, 
+        error: "user_id, pair, amount, and investedRate are required" 
+      };
+      return;
+    }
+
+    const newInvestment = await supabaseRequest("investments", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id,
+        pair,
+        amount: parseFloat(amount),
+        investedRate: parseFloat(investedRate),
+        date: new Date().toISOString(),
+        closed: false
+      })
+    });
+
+    ctx.response.body = { 
+      success: true, 
+      investment: newInvestment[0] 
+    };
+  } catch (error) {
+    console.error("Error adding investment:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to add investment",
+      message: error.message 
+    };
+  }
+});
+
+// Close an investment
+router.put("/api/investments/:id/close", async (ctx) => {
+  try {
+    const investmentId = ctx.params.id;
+    const body = await ctx.request.body().value;
+    const { closedRate } = body;
+
+    if (!closedRate) {
+      ctx.response.status = 400;
+      ctx.response.body = { 
+        success: false, 
+        error: "closedRate is required" 
+      };
+      return;
+    }
+
+    const updatedInvestment = await supabaseRequest(`investments?id=eq.${investmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        closed: true,
+        closedRate: parseFloat(closedRate),
+        closedDate: new Date().toISOString()
+      })
+    });
+
+    ctx.response.body = { 
+      success: true, 
+      investment: updatedInvestment[0] 
+    };
+  } catch (error) {
+    console.error("Error closing investment:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to close investment",
+      message: error.message 
+    };
+  }
+});
+
+// Get investment portfolio summary
+router.get("/api/investments/:userId/summary", async (ctx) => {
+  try {
+    const userId = ctx.params.userId;
+    const allInvestments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}`);
+    
+    const activeInvestments = allInvestments.filter(inv => !inv.closed);
+    const closedInvestments = allInvestments.filter(inv => inv.closed);
+    
+    // Calculate total invested
+    const totalInvested = allInvestments.reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+    
+    // Calculate total profit/loss from closed investments
+    const totalPnL = closedInvestments.reduce((sum, inv) => {
+      const investedValue = parseFloat(inv.amount);
+      const closedValue = investedValue * (parseFloat(inv.closedRate) / parseFloat(inv.investedRate));
+      return sum + (closedValue - investedValue);
+    }, 0);
+    
+    ctx.response.body = { 
+      success: true, 
+      summary: {
+        totalInvested,
+        totalPnL,
+        activeCount: activeInvestments.length,
+        closedCount: closedInvestments.length,
+        totalCount: allInvestments.length
+      }
+    };
+  } catch (error) {
+    console.error("Error fetching investment summary:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to fetch investment summary",
+      message: error.message 
+    };
+  }
+});
+
 app.use(router.routes());
 app.use(router.allowedMethods());
 
