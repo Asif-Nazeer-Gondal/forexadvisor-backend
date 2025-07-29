@@ -1,4 +1,5 @@
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
+import { create, verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 const app = new Application();
 const router = new Router();
@@ -6,6 +7,9 @@ const router = new Router();
 // Supabase configuration
 const SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
 const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmamJqZnBpdG9nZnNyb29mZ2dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMzNjA0MjcsImV4cCI6MjA2ODkzNjQyN30.PC1TUodgyEoBR_45AzjQrgOfIZuc4qVRT1oFnv8ahbs";
+
+// JWT Secret (in production, use environment variable)
+const JWT_SECRET = "your-super-secret-jwt-key-change-this-in-production";
 
 // Helper function to make Supabase API calls
 async function supabaseRequest(endpoint: string, options: RequestInit = {}) {
@@ -29,9 +33,223 @@ async function supabaseRequest(endpoint: string, options: RequestInit = {}) {
   return response.json();
 }
 
+// Middleware to verify JWT token
+async function authMiddleware(ctx: any, next: any) {
+  const authHeader = ctx.request.headers.get("Authorization");
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    ctx.response.status = 401;
+    ctx.response.body = { 
+      success: false, 
+      error: "Authorization header required" 
+    };
+    return;
+  }
+
+  try {
+    const token = authHeader.substring(7);
+    const payload = await verify(token, JWT_SECRET);
+    ctx.state.user = payload;
+    await next();
+  } catch (error) {
+    ctx.response.status = 401;
+    ctx.response.body = { 
+      success: false, 
+      error: "Invalid token" 
+    };
+  }
+}
+
+// Helper function to hash password (simple implementation)
+function hashPassword(password: string): string {
+  // In production, use proper bcrypt or similar
+  return btoa(password + "salt");
+}
+
+// Helper function to verify password
+function verifyPassword(password: string, hashedPassword: string): boolean {
+  return hashPassword(password) === hashedPassword;
+}
+
 router.get("/api/health", (ctx) => {
   ctx.response.body = { status: "OK", deployed: true };
 });
+
+// ===== AUTHENTICATION ENDPOINTS =====
+
+// User registration
+router.post("/api/auth/register", async (ctx) => {
+  try {
+    const body = await ctx.request.body().value;
+    const { email, password, name } = body;
+
+    if (!email || !password || !name) {
+      ctx.response.status = 400;
+      ctx.response.body = { 
+        success: false, 
+        error: "email, password, and name are required" 
+      };
+      return;
+    }
+
+    // Check if user already exists
+    const existingUsers = await supabaseRequest(`users?select=id&email=eq.${email}`);
+    
+    if (existingUsers.length > 0) {
+      ctx.response.status = 409;
+      ctx.response.body = { 
+        success: false, 
+        error: "User already exists" 
+      };
+      return;
+    }
+
+    // Create new user
+    const hashedPassword = hashPassword(password);
+    const newUser = await supabaseRequest("users", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        password: hashedPassword,
+        name,
+        created_at: new Date().toISOString()
+      })
+    });
+
+    // Generate JWT token
+    const token = await create(
+      { alg: "HS256", typ: "JWT" },
+      { 
+        userId: newUser[0].id, 
+        email: newUser[0].email,
+        name: newUser[0].name,
+        exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+      },
+      JWT_SECRET
+    );
+
+    ctx.response.body = { 
+      success: true, 
+      user: {
+        id: newUser[0].id,
+        email: newUser[0].email,
+        name: newUser[0].name
+      },
+      token 
+    };
+  } catch (error) {
+    console.error("Error registering user:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to register user",
+      message: error.message 
+    };
+  }
+});
+
+// User login
+router.post("/api/auth/login", async (ctx) => {
+  try {
+    const body = await ctx.request.body().value;
+    const { email, password } = body;
+
+    if (!email || !password) {
+      ctx.response.status = 400;
+      ctx.response.body = { 
+        success: false, 
+        error: "email and password are required" 
+      };
+      return;
+    }
+
+    // Find user by email
+    const users = await supabaseRequest(`users?select=*&email=eq.${email}`);
+    
+    if (users.length === 0) {
+      ctx.response.status = 401;
+      ctx.response.body = { 
+        success: false, 
+        error: "Invalid credentials" 
+      };
+      return;
+    }
+
+    const user = users[0];
+
+    // Verify password
+    if (!verifyPassword(password, user.password)) {
+      ctx.response.status = 401;
+      ctx.response.body = { 
+        success: false, 
+        error: "Invalid credentials" 
+      };
+      return;
+    }
+
+    // Generate JWT token
+    const token = await create(
+      { alg: "HS256", typ: "JWT" },
+      { 
+        userId: user.id, 
+        email: user.email,
+        name: user.name,
+        exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+      },
+      JWT_SECRET
+    );
+
+    ctx.response.body = { 
+      success: true, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      },
+      token 
+    };
+  } catch (error) {
+    console.error("Error logging in:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to login",
+      message: error.message 
+    };
+  }
+});
+
+// Get current user profile
+router.get("/api/auth/profile", authMiddleware, async (ctx) => {
+  try {
+    const userId = ctx.state.user.userId;
+    const users = await supabaseRequest(`users?select=id,email,name,created_at&id=eq.${userId}`);
+    
+    if (users.length === 0) {
+      ctx.response.status = 404;
+      ctx.response.body = { 
+        success: false, 
+        error: "User not found" 
+      };
+      return;
+    }
+
+    ctx.response.body = { 
+      success: true, 
+      user: users[0] 
+    };
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: "Failed to fetch profile",
+      message: error.message 
+    };
+  }
+});
+
+// ===== FOREX ENDPOINTS =====
 
 // Get all forex rates
 router.get("/api/forex", async (ctx) => {
@@ -122,12 +340,12 @@ router.post("/api/forex", async (ctx) => {
   }
 });
 
-// ===== INVESTMENT ENDPOINTS =====
+// ===== PROTECTED INVESTMENT ENDPOINTS =====
 
-// Get all investments for a user
-router.get("/api/investments/:userId", async (ctx) => {
+// Get all investments for current user
+router.get("/api/investments", authMiddleware, async (ctx) => {
   try {
-    const userId = ctx.params.userId;
+    const userId = ctx.state.user.userId;
     const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&order=date.desc`);
     
     ctx.response.body = { 
@@ -146,10 +364,10 @@ router.get("/api/investments/:userId", async (ctx) => {
   }
 });
 
-// Get active investments for a user
-router.get("/api/investments/:userId/active", async (ctx) => {
+// Get active investments for current user
+router.get("/api/investments/active", authMiddleware, async (ctx) => {
   try {
-    const userId = ctx.params.userId;
+    const userId = ctx.state.user.userId;
     const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&closed=eq.false&order=date.desc`);
     
     ctx.response.body = { 
@@ -168,10 +386,10 @@ router.get("/api/investments/:userId/active", async (ctx) => {
   }
 });
 
-// Get closed investments for a user
-router.get("/api/investments/:userId/closed", async (ctx) => {
+// Get closed investments for current user
+router.get("/api/investments/closed", authMiddleware, async (ctx) => {
   try {
-    const userId = ctx.params.userId;
+    const userId = ctx.state.user.userId;
     const investments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}&closed=eq.true&order=closedDate.desc`);
     
     ctx.response.body = { 
@@ -190,17 +408,18 @@ router.get("/api/investments/:userId/closed", async (ctx) => {
   }
 });
 
-// Add new investment
-router.post("/api/investments", async (ctx) => {
+// Add new investment (protected)
+router.post("/api/investments", authMiddleware, async (ctx) => {
   try {
+    const userId = ctx.state.user.userId;
     const body = await ctx.request.body().value;
-    const { user_id, pair, amount, investedRate } = body;
+    const { pair, amount, investedRate } = body;
 
-    if (!user_id || !pair || !amount || !investedRate) {
+    if (!pair || !amount || !investedRate) {
       ctx.response.status = 400;
       ctx.response.body = { 
         success: false, 
-        error: "user_id, pair, amount, and investedRate are required" 
+        error: "pair, amount, and investedRate are required" 
       };
       return;
     }
@@ -208,7 +427,7 @@ router.post("/api/investments", async (ctx) => {
     const newInvestment = await supabaseRequest("investments", {
       method: "POST",
       body: JSON.stringify({
-        user_id,
+        user_id: userId,
         pair,
         amount: parseFloat(amount),
         investedRate: parseFloat(investedRate),
@@ -232,9 +451,10 @@ router.post("/api/investments", async (ctx) => {
   }
 });
 
-// Close an investment
-router.put("/api/investments/:id/close", async (ctx) => {
+// Close an investment (protected)
+router.put("/api/investments/:id/close", authMiddleware, async (ctx) => {
   try {
+    const userId = ctx.state.user.userId;
     const investmentId = ctx.params.id;
     const body = await ctx.request.body().value;
     const { closedRate } = body;
@@ -244,6 +464,18 @@ router.put("/api/investments/:id/close", async (ctx) => {
       ctx.response.body = { 
         success: false, 
         error: "closedRate is required" 
+      };
+      return;
+    }
+
+    // Verify the investment belongs to the user
+    const investments = await supabaseRequest(`investments?select=*&id=eq.${investmentId}&user_id=eq.${userId}`);
+    
+    if (investments.length === 0) {
+      ctx.response.status = 404;
+      ctx.response.body = { 
+        success: false, 
+        error: "Investment not found" 
       };
       return;
     }
@@ -272,10 +504,10 @@ router.put("/api/investments/:id/close", async (ctx) => {
   }
 });
 
-// Get investment portfolio summary
-router.get("/api/investments/:userId/summary", async (ctx) => {
+// Get investment portfolio summary (protected)
+router.get("/api/investments/summary", authMiddleware, async (ctx) => {
   try {
-    const userId = ctx.params.userId;
+    const userId = ctx.state.user.userId;
     const allInvestments = await supabaseRequest(`investments?select=*&user_id=eq.${userId}`);
     
     const activeInvestments = allInvestments.filter(inv => !inv.closed);
