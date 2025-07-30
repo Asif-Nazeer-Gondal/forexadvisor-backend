@@ -75,12 +75,37 @@ router.get("/api/health", (ctx) => {
   ctx.response.body = { status: "OK", deployed: true };
 });
 
+// Debug endpoint to test body parsing
+router.post("/api/debug", async (ctx) => {
+  try {
+    console.log("Debug endpoint called");
+    console.log("Request headers:", Object.fromEntries(ctx.request.headers.entries()));
+    
+    const body = await ctx.request.body({ type: "json" }).value;
+    console.log("Body parsed successfully:", body);
+    
+    ctx.response.body = { 
+      success: true, 
+      message: "Body parsed successfully",
+      body 
+    };
+  } catch (error) {
+    console.error("Debug endpoint error:", error);
+    ctx.response.status = 500;
+    ctx.response.body = { 
+      success: false, 
+      error: error.message,
+      stack: error.stack 
+    };
+  }
+});
+
 // ===== AUTHENTICATION ENDPOINTS =====
 
 // User registration
 router.post("/api/auth/register", async (ctx) => {
   try {
-    const body = await ctx.request.body().value;
+    const body = await ctx.request.body({ type: "json" }).value;
     const { email, password, name } = body;
 
     if (!email || !password || !name) {
