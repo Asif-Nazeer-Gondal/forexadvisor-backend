@@ -80,7 +80,7 @@ router.get("/api/health", (ctx) => {
 // User registration
 router.post("/api/auth/register", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
+    const body = await ctx.request.body().value;
     const { email, password, name } = body;
 
     if (!email || !password || !name) {
@@ -151,7 +151,7 @@ router.post("/api/auth/register", async (ctx) => {
 // User login
 router.post("/api/auth/login", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
+    const body = await ctx.request.body().value;
     const { email, password } = body;
 
     if (!email || !password) {
@@ -304,7 +304,7 @@ router.get("/api/forex/:pair", async (ctx) => {
 // Add new forex rate (for testing/admin purposes)
 router.post("/api/forex", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
+    const body = await ctx.request.body().value;
     const { currency_pair, rate, timestamp } = body;
 
     if (!currency_pair || !rate) {
@@ -412,7 +412,7 @@ router.get("/api/investments/closed", authMiddleware, async (ctx) => {
 router.post("/api/investments", authMiddleware, async (ctx) => {
   try {
     const userId = ctx.state.user.userId;
-    const body = await ctx.request.body({ type: "json" }).value;
+    const body = await ctx.request.body().value;
     const { pair, amount, investedRate } = body;
 
     if (!pair || !amount || !investedRate) {
@@ -456,7 +456,7 @@ router.put("/api/investments/:id/close", authMiddleware, async (ctx) => {
   try {
     const userId = ctx.state.user.userId;
     const investmentId = ctx.params.id;
-    const body = await ctx.request.body({ type: "json" }).value;
+    const body = await ctx.request.body().value;
     const { closedRate } = body;
 
     if (!closedRate) {
