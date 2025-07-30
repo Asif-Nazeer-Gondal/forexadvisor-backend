@@ -81,7 +81,26 @@ router.post("/api/debug", async (ctx) => {
     console.log("Debug endpoint called");
     console.log("Request headers:", Object.fromEntries(ctx.request.headers.entries()));
     
-    const body = await ctx.request.body({ type: "json" }).value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
+    
     console.log("Body parsed successfully:", body);
     
     ctx.response.body = { 
@@ -105,7 +124,25 @@ router.post("/api/debug", async (ctx) => {
 // User registration
 router.post("/api/auth/register", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
     const { email, password, name } = body;
 
     if (!email || !password || !name) {
@@ -176,7 +213,25 @@ router.post("/api/auth/register", async (ctx) => {
 // User login
 router.post("/api/auth/login", async (ctx) => {
   try {
-    const body = await ctx.request.body().value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
     const { email, password } = body;
 
     if (!email || !password) {
@@ -329,7 +384,25 @@ router.get("/api/forex/:pair", async (ctx) => {
 // Add new forex rate (for testing/admin purposes)
 router.post("/api/forex", async (ctx) => {
   try {
-    const body = await ctx.request.body().value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
     const { currency_pair, rate, timestamp } = body;
 
     if (!currency_pair || !rate) {
@@ -437,7 +510,25 @@ router.get("/api/investments/closed", authMiddleware, async (ctx) => {
 router.post("/api/investments", authMiddleware, async (ctx) => {
   try {
     const userId = ctx.state.user.userId;
-    const body = await ctx.request.body().value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
     const { pair, amount, investedRate } = body;
 
     if (!pair || !amount || !investedRate) {
@@ -481,7 +572,25 @@ router.put("/api/investments/:id/close", authMiddleware, async (ctx) => {
   try {
     const userId = ctx.state.user.userId;
     const investmentId = ctx.params.id;
-    const body = await ctx.request.body().value;
+    // Try different approaches for body parsing
+    let body;
+    try {
+      // Method 1: Try with type specification
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (e1) {
+      try {
+        // Method 2: Try without type specification
+        body = await ctx.request.body().value;
+      } catch (e2) {
+        try {
+          // Method 3: Try parsing manually
+          const rawBody = await ctx.request.body({ type: "text" }).value;
+          body = JSON.parse(rawBody);
+        } catch (e3) {
+          throw new Error(`All parsing methods failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+        }
+      }
+    }
     const { closedRate } = body;
 
     if (!closedRate) {
