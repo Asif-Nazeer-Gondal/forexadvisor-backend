@@ -3,6 +3,7 @@
 
 const BASE_URL = 'https://forexadvisor-backend-z3qt54xsmy2s.asif-nazeer-gondal.deno.net';
 
+
 async function testRegistration() {
   console.log('🧪 Testing User Registration...\n');
   
