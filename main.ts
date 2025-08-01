@@ -1,4 +1,6 @@
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { hash, compare } from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+
 // Simple JWT implementation
 function createSimpleJWT(payload: any, secret: string): string {
   const header = { alg: "HS256", typ: "JWT" };
@@ -21,7 +23,6 @@ function verifySimpleJWT(token: string, secret: string): any {
   
   return payload;
 }
-import { hash, compare } from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 
 // === CONFIG ===
 const SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
