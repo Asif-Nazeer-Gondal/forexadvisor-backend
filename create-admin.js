@@ -1,8 +1,18 @@
 // Create New Admin User
 // Run with: node create-admin.js
 
-const SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmamJqZnBpdG9nZnNyb29mZ2dnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzM2MDQyNywiZXhwIjoyMDY4OTM2NDI3fQ.jURJmFD-_TRsstgJVT0LJ4I-DrS8o6jrYeMfHS7H8LE";
+// Load environment variables from .env file if available
+let SUPABASE_URL, SUPABASE_SECRET_KEY;
+try {
+  const dotenv = require('dotenv');
+  dotenv.config();
+  SUPABASE_URL = process.env.SUPABASE_URL;
+  SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+} catch (error) {
+  // Fallback to hardcoded values if .env loading fails
+  SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
+  SUPABASE_SECRET_KEY = "sb_secret_oCDMqkI3f9cUK5IbSCBmJA_9eeLgexG";
+}
 const bcrypt = require('bcryptjs');
 
 async function createAdminUser() {
@@ -20,9 +30,11 @@ async function createAdminUser() {
     // Check if user already exists
     const checkResponse = await fetch(`${SUPABASE_URL}/rest/v1/users?select=email&email=eq.${encodeURIComponent(email)}`, {
       headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
         "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+        "x-client-info": "node-admin-script@1.0.0"
       }
     });
     
@@ -38,10 +50,11 @@ async function createAdminUser() {
     const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: "POST",
       headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
         "Content-Type": "application/json",
-        "Prefer": "return=representation"
+        "Prefer": "return=representation",
+        "x-client-info": "node-admin-script@1.0.0"
       },
       body: JSON.stringify({
         email,
@@ -70,4 +83,4 @@ async function createAdminUser() {
   }
 }
 
-createAdminUser(); 
+createAdminUser();

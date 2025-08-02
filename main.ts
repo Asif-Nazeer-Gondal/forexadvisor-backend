@@ -1,124 +1,143 @@
+// main.ts
+
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { config } from "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
-// === CONFIG ===
-const SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
-const SUPABASE_SECRET_KEY = "sb_secret_oCDMqkI3f9cUK5IbSCBmJA_9eeLgexG";
-const JWT_SECRET = "your-super-secret-jwt-key-change-this-in-production";
-const PORT = 8000;
+// Load environment variables from .env file
+const env = config();
 
-// === SIMPLE PASSWORD HASHING ===
+// === ENVIRONMENT CONFIG ===
+const SUPABASE_URL = env.SUPABASE_URL || Deno.env.get("SUPABASE_URL");
+const SUPABASE_SECRET_KEY = env.SUPABASE_SECRET_KEY || Deno.env.get("SUPABASE_SECRET_KEY");
+const JWT_SECRET = env.JWT_SECRET || Deno.env.get("JWT_SECRET") || "dev-secret-key";
+
+// Validate env vars
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.");
+}
+
+// === HELPERS ===
+
+// Password Hashing using bcrypt
+import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+
 async function hashPassword(password: string): Promise<string> {
-  return btoa(password + "salt");
+  return await bcrypt.hash(password);
 }
 
 async function verifyPassword(password: string, hashed: string): Promise<boolean> {
-  return btoa(password + "salt") === hashed;
+  return await bcrypt.compare(password, hashed);
 }
 
-// === SIMPLE JWT ===
+// JWT (basic custom version)
 function createSimpleJWT(payload: any, secret: string): string {
-  const header = { alg: "HS256", typ: "JWT" };
-  const encodedHeader = btoa(JSON.stringify(header));
-  const encodedPayload = btoa(JSON.stringify(payload));
-  const signature = btoa(secret + encodedPayload);
-  return `${encodedHeader}.${encodedPayload}.${signature}`;
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = btoa(JSON.stringify(payload));
+  const signature = btoa(secret + body);
+  return `${header}.${body}.${signature}`;
 }
 
 function verifySimpleJWT(token: string, secret: string): any {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error("Invalid JWT format");
-  
-  const payload = JSON.parse(atob(parts[1]));
-  const expectedSignature = btoa(secret + parts[1]);
-  
-  if (parts[2] !== expectedSignature) {
-    throw new Error("Invalid signature");
-  }
-  
-  return payload;
+  const [header, body, signature] = token.split(".");
+  if (!header || !body || !signature) throw new Error("Invalid token format");
+
+  const expectedSignature = btoa(secret + body);
+  if (signature !== expectedSignature) throw new Error("Invalid token signature");
+
+  return JSON.parse(atob(body));
 }
 
-// === SUPABASE HELPER ===
+// Supabase Request Helper
 async function supabaseRequest(endpoint: string, options: RequestInit = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+  // For new API key format, we use the same key for both apikey and Authorization headers
+  // The secret key should be in the format sb_secret_xxxxxxxx
   const headers = {
     "apikey": SUPABASE_SECRET_KEY,
     "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
     "Content-Type": "application/json",
     "Prefer": "return=representation",
+    "x-client-info": "deno-backend@1.0.0",
     ...options.headers,
   };
   const response = await fetch(url, { ...options, headers });
+
   if (!response.ok) {
-    const text = await response.text();
-    console.error(`Supabase request failed: ${response.status} ${text}`);
-    throw new Error(`Supabase request failed: ${response.status} ${text}`);
+    const errorText = await response.text();
+    console.error(`Supabase error: ${response.status} ${errorText}`);
+    throw new Error(`Supabase error: ${response.status}`);
   }
-  return response.json();
+
+  return await response.json();
 }
 
-// === APP & ROUTER ===
-const app = new Application();
+// === ROUTES ===
+
 const router = new Router();
 
-// === ROOT ===
+// Root
 router.get("/", (ctx) => {
-  ctx.response.body = { 
-    message: "Forex Advisor API is running!",
+  ctx.response.body = {
+    message: "Forex Advisor API is live!",
     endpoints: {
       health: "/api/health",
       register: "/api/auth/register",
       login: "/api/auth/login",
-      forex: "/api/forex"
-    }
+      forex: "/api/forex",
+    },
   };
 });
 
-// === HEALTH ===
+// Health Check
 router.get("/api/health", (ctx) => {
   ctx.response.body = { status: "OK", deployed: true };
 });
 
-// === AUTH ===
+// Register
 router.post("/api/auth/register", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
-    const { email, password, name } = body;
+    const { email, password, name } = await ctx.request.body({ type: "json" }).value;
 
     if (!email || !password || !name) {
-      ctx.response.status = 400;
-      ctx.response.body = { success: false, error: "name, email, and password required" };
-      return;
+      ctx.throw(400, "name, email, and password required");
     }
 
-    // Check if user already exists
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      ctx.throw(400, "Invalid email format");
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      ctx.throw(400, "Password must be at least 8 characters long");
+    }
+
     const existing = await supabaseRequest(`users?select=email&email=eq.${encodeURIComponent(email)}`);
     if (existing.length > 0) {
-      ctx.response.status = 409;
-      ctx.response.body = { success: false, error: "User already exists" };
-      return;
+      ctx.throw(409, "User already exists");
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(password);
-
-    // Insert user
+    const hashed = await hashPassword(password);
     const newUser = await supabaseRequest("users", {
       method: "POST",
-      body: JSON.stringify({ 
-        email, 
-        password: hashedPassword, 
+      body: JSON.stringify({
+        email,
+        password: hashed,
         name,
-        created_at: new Date().toISOString()
-      })
+        created_at: new Date().toISOString(),
+      }),
     });
 
-    // Generate JWT
-    const token = createSimpleJWT({
-      userId: newUser[0].id,
-      email: newUser[0].email,
-      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24), // 24h
-    }, JWT_SECRET);
+    const token = createSimpleJWT(
+      {
+        userId: newUser[0].id,
+        email: newUser[0].email,
+        exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
+      },
+      JWT_SECRET
+    );
 
     ctx.response.status = 201;
     ctx.response.body = {
@@ -128,81 +147,84 @@ router.post("/api/auth/register", async (ctx) => {
         email: newUser[0].email,
         name: newUser[0].name,
       },
-      token
+      token,
     };
-  } catch (error) {
-    console.error("Registration Error:", error);
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: error.message };
+  } catch (err) {
+    console.error("Register Error:", err);
+    ctx.response.status = err.status || 500;
+    ctx.response.body = { success: false, error: err.message };
   }
 });
 
+// Login
 router.post("/api/auth/login", async (ctx) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
-    const { email, password } = body;
+    const { email, password } = await ctx.request.body({ type: "json" }).value;
 
     if (!email || !password) {
-      ctx.response.status = 400;
-      ctx.response.body = { success: false, error: "email and password are required" };
-      return;
+      ctx.throw(400, "email and password are required");
     }
 
     const users = await supabaseRequest(`users?select=*&email=eq.${encodeURIComponent(email)}`);
     if (users.length === 0) {
-      ctx.response.status = 401;
-      ctx.response.body = { success: false, error: "Invalid credentials" };
-      return;
+      ctx.throw(401, "Invalid credentials");
     }
 
     const user = users[0];
-    console.log("User from Supabase:", JSON.stringify(user, null, 2));
-    
     const valid = await verifyPassword(password, user.password);
+
     if (!valid) {
-      ctx.response.status = 401;
-      ctx.response.body = { success: false, error: "Invalid credentials" };
-      return;
+      ctx.throw(401, "Invalid credentials");
     }
 
-    const token = createSimpleJWT({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24),
-    }, JWT_SECRET);
+    const token = createSimpleJWT(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        exp: Math.floor(Date.now() / 1000) + 86400,
+      },
+      JWT_SECRET
+    );
 
     ctx.response.body = {
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        name: user.name || "Unknown",
+        name: user.name,
       },
-      token
+      token,
     };
-  } catch (error) {
-    console.error("Login Error:", error);
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: error.message };
+  } catch (err) {
+    console.error("Login Error:", err);
+    ctx.response.status = err.status || 500;
+    ctx.response.body = { success: false, error: err.message };
   }
 });
 
-// === FOREX ===
+// Forex Rates
 router.get("/api/forex", async (ctx) => {
   try {
     const rates = await supabaseRequest("forex_rates?select=*&order=created_at.desc");
     ctx.response.body = { success: true, rates, count: rates.length };
-  } catch (error) {
-    console.error("Error fetching forex rates:", error);
+  } catch (err) {
+    console.error("Forex Error:", err);
     ctx.response.status = 500;
-    ctx.response.body = { success: false, error: "Failed to fetch forex rates", message: error.message };
+    ctx.response.body = { success: false, error: err.message };
   }
 });
 
-// === APP START ===
+// === APP SETUP ===
+
+const app = new Application();
 app.use(router.routes());
 app.use(router.allowedMethods());
 
-console.log(`Server running on http://localhost:${PORT}`);
-await app.listen({ port: PORT });
+console.log("✅ Server ready on Deno Deploy");
+
+// Use Oak's built-in server
+const port = 8000;
+console.log(`Starting server on http://localhost:${port}/`);
+await app.listen({ port });
+console.log(`Server listening on http://localhost:${port}/`);

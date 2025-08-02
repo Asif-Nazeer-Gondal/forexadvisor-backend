@@ -1,8 +1,18 @@
 // Create New User with Current Hashing Method
 // Run with: node create-new-user.js
 
-const SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
-const SUPABASE_SECRET_KEY = "sb_secret_oCDMqkI3f9cUK5IbSCBmJA_9eeLgexG";
+// Load environment variables from .env file if available
+let SUPABASE_URL, SUPABASE_SECRET_KEY;
+try {
+  const dotenv = require('dotenv');
+  dotenv.config();
+  SUPABASE_URL = process.env.SUPABASE_URL;
+  SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+} catch (error) {
+  // Fallback to hardcoded values if .env loading fails
+  SUPABASE_URL = "https://zfjbjfpitogfsroofggg.supabase.co";
+  SUPABASE_SECRET_KEY = "sb_secret_oCDMqkI3f9cUK5IbSCBmJA_9eeLgexG";
+}
 
 async function createNewUser() {
   console.log('👤 Creating New User with Current Hashing...\n');
@@ -12,8 +22,9 @@ async function createNewUser() {
     const password = 'password123';
     const name = 'Test User';
     
-    // Hash the password using the same method as the server
-    const hashedPassword = btoa(password + "salt");
+    // Hash the password using bcrypt (same as server)
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
     console.log('Password hashed:', hashedPassword);
     
     // Check if user already exists
@@ -22,6 +33,8 @@ async function createNewUser() {
         "apikey": SUPABASE_SECRET_KEY,
         "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
         "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+        "x-client-info": "node-user-script@1.0.0"
       }
     });
     
@@ -40,7 +53,8 @@ async function createNewUser() {
         "apikey": SUPABASE_SECRET_KEY,
         "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
         "Content-Type": "application/json",
-        "Prefer": "return=representation"
+        "Prefer": "return=representation",
+        "x-client-info": "node-user-script@1.0.0"
       },
       body: JSON.stringify({
         email,
@@ -69,4 +83,4 @@ async function createNewUser() {
   }
 }
 
-createNewUser(); 
+createNewUser();
