@@ -1,11 +1,10 @@
 // main.ts
 
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { config } from "https://deno.land/x/dotenv@v3.2.2/mod.ts";
+import { load } from "https://deno.land/std@0.203.0/dotenv/mod.ts";
 
 // Load environment variables from .env file
-const env = config();
+const env = await load();
 
 // === ENVIRONMENT CONFIG ===
 const SUPABASE_URL = env.SUPABASE_URL || Deno.env.get("SUPABASE_URL");
@@ -19,15 +18,18 @@ if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
 
 // === HELPERS ===
 
-// Password Hashing using bcrypt
-import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
-
+// Password Hashing using Web Crypto API (Deno Deploy compatible)
 async function hashPassword(password: string): Promise<string> {
-  return await bcrypt.hash(password);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + "salt123"); // Simple salt for demo
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function verifyPassword(password: string, hashed: string): Promise<boolean> {
-  return await bcrypt.compare(password, hashed);
+  const hashedInput = await hashPassword(password);
+  return hashedInput === hashed;
 }
 
 // JWT (basic custom version)
@@ -53,13 +55,13 @@ async function supabaseRequest(endpoint: string, options: RequestInit = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
   // For new API key format, we use the same key for both apikey and Authorization headers
   // The secret key should be in the format sb_secret_xxxxxxxx
-  const headers = {
-    "apikey": SUPABASE_SECRET_KEY,
+  const headers: Record<string, string> = {
+    "apikey": SUPABASE_SECRET_KEY!,
     "Authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
     "Content-Type": "application/json",
     "Prefer": "return=representation",
     "x-client-info": "deno-backend@1.0.0",
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   };
   const response = await fetch(url, { ...options, headers });
 
@@ -151,8 +153,8 @@ router.post("/api/auth/register", async (ctx) => {
     };
   } catch (err) {
     console.error("Register Error:", err);
-    ctx.response.status = err.status || 500;
-    ctx.response.body = { success: false, error: err.message };
+    ctx.response.status = (err as any)?.status || 500;
+    ctx.response.body = { success: false, error: (err as Error)?.message || "Registration failed" };
   }
 });
 
@@ -198,8 +200,8 @@ router.post("/api/auth/login", async (ctx) => {
     };
   } catch (err) {
     console.error("Login Error:", err);
-    ctx.response.status = err.status || 500;
-    ctx.response.body = { success: false, error: err.message };
+    ctx.response.status = (err as any)?.status || 500;
+    ctx.response.body = { success: false, error: (err as Error)?.message || "Login failed" };
   }
 });
 
@@ -211,7 +213,7 @@ router.get("/api/forex", async (ctx) => {
   } catch (err) {
     console.error("Forex Error:", err);
     ctx.response.status = 500;
-    ctx.response.body = { success: false, error: err.message };
+    ctx.response.body = { success: false, error: (err as Error)?.message || "Failed to fetch forex rates" };
   }
 });
 

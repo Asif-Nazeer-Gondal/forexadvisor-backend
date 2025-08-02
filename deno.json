@@ -4,10 +4,21 @@
     "start": "deno run --allow-net --allow-env main.ts"
   },
   "imports": {
-    "oak": "https://deno.land/x/oak/mod.ts"
+    "oak": "https://deno.land/x/oak@v12.6.1/mod.ts"
   },
   "compilerOptions": {
-    "lib": ["deno.window"],
+    "lib": [
+      "deno.window"
+    ],
     "strict": true
+  },
+  "nodeModulesDir": "none",
+  "deploy": {
+    "project": "35450ad5-3196-4536-a199-dbf4b66fe3eb",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "main.ts"
   }
-} 
+}
